@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Helpdesk</title>
+<style>
+  * { box-sizing: border-box; font-family: Arial, sans-serif; }
+  body { background: #f4f5f7; margin: 0; padding: 20px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  .card { background: white; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  h1 { color: #2c3e50; }
+  input, select, button { padding: 10px; margin: 5px 0; width: 100%; border-radius: 4px; border: 1px solid #ccc; }
+  button { background: #2c3e50; color: white; border: none; cursor: pointer; font-weight: bold; }
+  button:hover { background: #34495e; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+  .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; color: white; }
+  .ABERTO { background: #3498db; }
+  .EM_ANDAMENTO { background: #f39c12; }
+  .FECHADO { background: #27ae60; }
+  .NEGATIVO { background: #e74c3c; }
+  .NEUTRO { background: #95a5a6; }
+  .POSITIVO { background: #27ae60; }
+  .erro { color: #e74c3c; margin-top: 10px; }
+  .top-bar { display: flex; justify-content: space-between; align-items: center; }
+  .acoes button { width: auto; margin-right: 5px; padding: 4px 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎫 Helpdesk</h1>
+
+  <div id="login-screen" class="card">
+    <h2>Login</h2>
+    <select id="tipoLogin">
+      <option value="usuario">Usuário</option>
+      <option value="atendente">Atendente</option>
+    </select>
+    <input id="loginEmail" type="email" placeholder="Email">
+    <input id="loginSenha" type="password" placeholder="Senha">
+    <button onclick="login()">Entrar</button>
+    <div id="loginErro" class="erro"></div>
+  </div>
+
+  <div id="app-screen" style="display:none">
+    <div class="card top-bar">
+      <span>Logado como <b id="tipoUsuarioLabel"></b></span>
+      <div>
+        <button id="btnRelatorio" style="display:none; width:auto;" onclick="baixarRelatorio()">📊 Baixar Relatório</button>
+        <button style="width:auto; background:#e74c3c;" onclick="logout()">Sair</button>
+      </div>
+    </div>
+
+    <div id="form-ticket" class="card">
+      <h2>Abrir novo Ticket</h2>
+      <input id="titulo" placeholder="Título">
+      <input id="descricao" placeholder="Descrição">
+      <select id="categoria">
+        <option>HARDWARE</option><option>SOFTWARE</option><option>REDE</option><option>OUTRO</option>
+      </select>
+      <select id="prioridade">
+        <option>BAIXA</option><option>MEDIA</option><option>ALTA</option>
+      </select>
+      <button onclick="criarTicket()">Criar Ticket</button>
+      <div id="criarErro" class="erro"></div>
+    </div>
+
+    <div class="card">
+      <h2>Tickets</h2>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Título</th><th>Status</th><th>Sentimento</th><th>Usuário</th><th>Atendente</th><th>Ações</th></tr>
+        </thead>
+        <tbody id="ticketsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost:8080";
+
+function getToken() { return localStorage.getItem("token"); }
+function getTipo() { return localStorage.getItem("tipo"); }
+
+async function login() {
+  const tipo = document.getElementById("tipoLogin").value;
+  const email = document.getElementById("loginEmail").value;
+  const senha = document.getElementById("loginSenha").value;
+  const url = tipo === "atendente" ? "/auth/login-atendente" : "/auth/login";
+
+  const resp = await fetch(API + url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, senha })
+  });
+
+  if (!resp.ok) {
+    document.getElementById("loginErro").innerText = "Email ou senha inválidos";
+    return;
+  }
+
+  const dados = await resp.json();
+  localStorage.setItem("token", dados.token);
+  localStorage.setItem("tipo", tipo);
+  mostrarApp();
+}
+
+function logout() {
+  localStorage.clear();
+  document.getElementById("login-screen").style.display = "block";
+  document.getElementById("app-screen").style.display = "none";
+}
+
+function mostrarApp() {
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app-screen").style.display = "block";
+  document.getElementById("tipoUsuarioLabel").innerText = getTipo();
+
+  const ehAtendente = getTipo() === "atendente";
+  document.getElementById("form-ticket").style.display = ehAtendente ? "none" : "block";
+  document.getElementById("btnRelatorio").style.display = ehAtendente ? "inline-block" : "none";
+
+  carregarTickets();
+}
+
+async function criarTicket() {
+  const body = {
+    titulo: document.getElementById("titulo").value,
+    descricao: document.getElementById("descricao").value,
+    categoria: document.getElementById("categoria").value,
+    prioridade: document.getElementById("prioridade").value
+  };
+
+  const resp = await fetch(API + "/tickets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + getToken() },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    document.getElementById("criarErro").innerText = "Erro ao criar ticket";
+    return;
+  }
+
+  document.getElementById("titulo").value = "";
+  document.getElementById("descricao").value = "";
+  carregarTickets();
+}
+
+async function carregarTickets() {
+  const resp = await fetch(API + "/tickets", {
+    headers: { "Authorization": "Bearer " + getToken() }
+  });
+
+  if (resp.status === 401) { logout(); return; }
+
+  const tickets = await resp.json();
+  const ehAtendente = getTipo() === "atendente";
+  const corpo = document.getElementById("ticketsBody");
+  corpo.innerHTML = "";
+
+  tickets.forEach(t => {
+    const linha = document.createElement("tr");
+    linha.innerHTML = `
+      <td>${t.id}</td>
+      <td>${t.titulo}</td>
+      <td><span class="badge ${t.status}">${t.status}</span></td>
+      <td>${t.sentimento ? `<span class="badge ${t.sentimento}">${t.sentimento}</span>` : "-"}</td>
+      <td>${t.usuario.nome}</td>
+      <td>${t.atendente ? t.atendente.nome : "-"}</td>
+      <td class="acoes">
+        ${ehAtendente && !t.atendente ? `<button onclick="assumirTicket(${t.id})">Assumir</button>` : ""}
+        ${ehAtendente && t.status === "EM_ANDAMENTO" ? `<button onclick="fecharTicket(${t.id})">Fechar</button>` : ""}
+      </td>
+    `;
+    corpo.appendChild(linha);
+  });
+}
+
+async function assumirTicket(id) {
+  await fetch(API + "/tickets/" + id + "/assumir", {
+    method: "PATCH",
+    headers: { "Authorization": "Bearer " + getToken() }
+  });
+  carregarTickets();
+}
+
+async function fecharTicket(id) {
+  await fetch(API + "/tickets/" + id + "/fechar", {
+    method: "PATCH",
+    headers: { "Authorization": "Bearer " + getToken() }
+  });
+  carregarTickets();
+}
+
+async function baixarRelatorio() {
+  const resp = await fetch(API + "/tickets/relatorio", {
+    headers: { "Authorization": "Bearer " + getToken() }
+  });
+  const blob = await resp.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "relatorio_tickets.xlsx";
+  a.click();
+}
+
+if (getToken()) mostrarApp();
+</script>
+</body>
+</html>

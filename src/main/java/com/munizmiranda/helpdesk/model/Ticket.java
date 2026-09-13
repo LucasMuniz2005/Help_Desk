@@ -1,9 +1,7 @@
-
 package com.munizmiranda.helpdesk.model;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -16,7 +14,6 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class Ticket {
 
     @Id
@@ -47,4 +44,12 @@ public class Ticket {
     private LocalDateTime dataAbertura;
 
     private LocalDateTime dataFechamento;
+
+    @ManyToOne
+    @JoinColumn(name = "usuario_id", nullable = false)
+    private Usuario usuario;
+
+    @ManyToOne
+    @JoinColumn(name = "atendente_id")
+    private Atendente atendente;
 }
