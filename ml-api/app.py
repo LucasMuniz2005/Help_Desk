@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify
 import joblib
+import os
 
 app = Flask(__name__)
 
-# Carrega o modelo e o vetorizador já treinados (uma vez só, quando o servidor sobe)
 modelo = joblib.load("modelo_sentimento.pkl")
 vetorizador = joblib.load("vetorizador.pkl")
 
@@ -21,4 +21,5 @@ def classificar_sentimento():
     return jsonify({"sentimento": sentimento})
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    porta = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=porta)
